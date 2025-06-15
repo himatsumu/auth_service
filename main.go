@@ -1,158 +1,161 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/google/uuid" // UUIDを生成するためにインポート
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/gothic"
 	"github.com/markbates/goth/providers/google"
 	"golang.org/x/crypto/bcrypt"
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-// DBの型宣言
+// データベースのusersテーブルを表すモデル
 type User struct {
-	ID       int    `json:"id"`
+	UserUuid     string `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"userUuid"`
+	Email        string `gorm:"unique;not null" json:"email"`
+	PasswordHash string `gorm:"size:255" json:"-"` // パスワードはJSONで返さない
+	Provider     string `gorm:"size:50;default:'email'" json:"provider"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// UserUuidが空の場合に新しいUUIDを自動で設定する
+func (user *User) BeforeCreate(tx *gorm.DB) (err error) {
+	if user.UserUuid == "" {
+		user.UserUuid = uuid.NewString()
+	}
+	return
+}
+
+// APIのレスポンスとしてクライアントに返すユーザー情報
+type UserResponse struct {
+	UserUuid string `json:"userUuid"` // データ型を string に変更
 	Email    string `json:"email"`
-	Name     string `json:"name"`
 	Provider string `json:"provider"`
 }
 
+// 認証関連のサービスをまとめた構造体
 type AuthService struct {
-	db    *sql.DB
+	db    *gorm.DB
 	store *sessions.CookieStore
 }
 
+// アプリケーションのエントリーポイント
 func main() {
-	// 環境変数から設定を取得
 	authPort := os.Getenv("AUTH_PORT")
 	if authPort == "" {
 		authPort = "18080"
 	}
 
-	// データベース接続
+	// データベース接続情報を環境変数から取得
 	dbHost := os.Getenv("DB_HOST")
 	dbPort := os.Getenv("DB_PORT")
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("AUTH_DB_NAME")
 
+	// データベース接続文字列を生成
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPassword, dbName)
 
-	db, err := sql.Open("postgres", dsn)
+	// GORMを使ってデータベースに接続
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-	defer db.Close()
 
-	// セッションストアの設定
+	// セッション管理のためのCookieStoreを初期化
 	sessionSecret := os.Getenv("SESSION_SECRET")
 	if sessionSecret == "" {
 		log.Fatal("SESSION_SECRET is not set")
 	}
 	store := sessions.NewCookieStore([]byte(sessionSecret))
 
-	// Gothの設定
+	// OAuth認証ライブラリ(Goth)の設定, Googleプロバイダーを使用
 	goth.UseProviders(
 		google.New(
 			os.Getenv("GOOGLE_CLIENT_ID"),
 			os.Getenv("GOOGLE_CLIENT_SECRET"),
-			os.Getenv("AUTH_CALLBACK_URL")+"/google",
+			os.Getenv("AUTH_CALLBACK_URL")+"/google", // 認証後のリダイレクト先
 		),
 	)
-
 	gothic.Store = store
 
-	// AuthService初期化
+	// 認証サービスのインスタンスを作成
 	authService := &AuthService{
 		db:    db,
 		store: store,
 	}
 
-	// データベーステーブル作成
-	if err := authService.createTables(); err != nil {
-		log.Fatal("Failed to create tables:", err)
+	// User構造体をもとにusersテーブルを自動生成・更新
+	if err := authService.db.AutoMigrate(&User{}); err != nil {
+		log.Fatal("Failed to migrate database:", err)
 	}
 
-	// ルーター設定
+	// HTTPルーター(mux)を初期化
 	r := mux.NewRouter()
 
-	// 認証エンドポイント
+	// 各APIエンドポイントと、それを処理する関数(ハンドラ)を紐付け
 	r.HandleFunc("/auth/{provider}", authService.handleAuth).Methods("GET")
 	r.HandleFunc("/auth/callback/{provider}", authService.handleAuthCallback).Methods("GET")
 	r.HandleFunc("/auth/logout", authService.handleLogout).Methods("POST", "OPTIONS")
-
-	// メール/パスワード認証
 	r.HandleFunc("/auth/register", authService.handleRegister).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/login", authService.handleLogin).Methods("POST", "OPTIONS")
 
-	// ユーザー情報取得
-	r.HandleFunc("/user", authService.handleGetUser).Methods("GET")
-
-	// CORS設定
+	// CORSミドルウェアを設定。異なるオリジン(ドメイン)からのリクエストを許可する
 	r.Use(corsMiddleware)
 
 	log.Printf("Auth service starting on port %s", authPort)
+	// Webサーバーを起動
 	log.Fatal(http.ListenAndServe(":"+authPort, r))
 }
 
-func (a *AuthService) createTables() error {
-	query := `
-	CREATE TABLE IF NOT EXISTS users (
-		id SERIAL PRIMARY KEY,
-		email VARCHAR(255) UNIQUE NOT NULL,
-		name VARCHAR(255) NOT NULL,
-		password_hash VARCHAR(255),
-		provider VARCHAR(50) DEFAULT 'email',
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
-
-	_, err := a.db.Exec(query)
-	return err
-}
-
+// /auth/{provider} へのGETリクエストを処理する
+// Googleなどの認証ページへリダイレクトを開始する
 func (a *AuthService) handleAuth(w http.ResponseWriter, r *http.Request) {
 	provider := mux.Vars(r)["provider"]
-	
-	// セッションにプロバイダーを設定
 	session, _ := a.store.Get(r, "auth-session")
 	session.Values["provider"] = provider
 	session.Save(r, w)
-
 	gothic.BeginAuthHandler(w, r)
 }
 
+// 認証プロバイダーからのコールバックを処理する
 func (a *AuthService) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
-	user, err := gothic.CompleteUserAuth(w, r)
+	// 認証プロバイダーからユーザー情報を取得
+	gothUser, err := gothic.CompleteUserAuth(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// ユーザーをデータベースに保存または更新
-	dbUser, err := a.saveOrUpdateUser(user.Email, user.Name, user.Provider)
+	// 取得したユーザー情報をデータベースに保存または更新
+	dbUser, err := a.saveOrUpdateUser(gothUser.Email, gothUser.Provider)
 	if err != nil {
 		http.Error(w, "Failed to save user", http.StatusInternalServerError)
 		return
 	}
 
-	// セッションにユーザーIDを保存
+	// ユーザーのUUIDをセッションに保存してログイン状態にする
 	session, _ := a.store.Get(r, "auth-session")
-	session.Values["user_id"] = dbUser.ID
+	session.Values["UserUuid"] = dbUser.UserUuid
 	session.Save(r, w)
 
-	// フロントエンドにリダイレクト
+	// フロントエンドのダッシュボードページにリダイレクト
 	http.Redirect(w, r, "http://localhost:3000/dashboard", http.StatusTemporaryRedirect)
 }
 
+// handleRegister はメールアドレスとパスワードでの新規登録を処理する
 func (a *AuthService) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
@@ -165,29 +168,35 @@ func (a *AuthService) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// パスワードをハッシュ化
+	// パスワードをハッシュ化して安全に保存
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
 		return
 	}
 
-	// ユーザーを作成
-	query := `INSERT INTO users (email, name, password_hash, provider) VALUES ($1, $2, $3, $4) RETURNING id`
-	var userID int
-	err = a.db.QueryRow(query, req.Email, req.Name, string(hashedPassword), "email").Scan(&userID)
-	if err != nil {
+	// 新しいユーザーを作成
+	user := User{
+		Email:        req.Email,
+		PasswordHash: string(hashedPassword),
+		Provider:     "email",
+	}
+
+	// BeforeCreateフックがここで実行され、user.UserUuidにUUIDが設定される
+	result := a.db.Create(&user)
+	if result.Error != nil {
 		http.Error(w, "Email already exists or database error", http.StatusConflict)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "User registered successfully",
-		"user_id": userID,
+		"message":  "User registered successfully",
+		"UserUuid": user.UserUuid,
 	})
 }
 
+// handleLogin はメールアドレスとパスワードでのログインを処理する
 func (a *AuthService) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
@@ -199,57 +208,42 @@ func (a *AuthService) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ユーザーを検索
+	// メールアドレスを元にユーザーを検索
 	var user User
-	var passwordHash string
-	query := `SELECT id, email, name, password_hash FROM users WHERE email = $1 AND provider = 'email'`
-	err := a.db.QueryRow(query, req.Email).Scan(&user.ID, &user.Email, &user.Name, &passwordHash)
-	if err != nil {
+	result := a.db.Where("email = ? AND provider = ?", req.Email, "email").First(&user)
+	if result.Error != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// パスワードを検証
-	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
+	// 入力されたパスワードと保存されているハッシュを比較
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// セッションにユーザーIDを保存
+	// ログイン成功。ユーザーのUUIDをセッションに保存
 	session, _ := a.store.Get(r, "auth-session")
-	session.Values["user_id"] = user.ID
+	session.Values["UserUuid"] = user.UserUuid
 	session.Save(r, w)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Login successful",
-		"user":    user,
+		"user": UserResponse{
+			UserUuid: user.UserUuid,
+			Email:    user.Email,
+			Provider: user.Provider,
+		},
 	})
 }
 
-func (a *AuthService) handleGetUser(w http.ResponseWriter, r *http.Request) {
-	session, _ := a.store.Get(r, "auth-session")
-	userID, ok := session.Values["user_id"].(int)
-	if !ok {
-		http.Error(w, "Not authenticated", http.StatusUnauthorized)
-		return
-	}
-
-	var user User
-	query := `SELECT id, email, name, provider FROM users WHERE id = $1`
-	err := a.db.QueryRow(query, userID).Scan(&user.ID, &user.Email, &user.Name, &user.Provider)
-	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
-}
-
+// handleLogout はログアウト処理を行う
 func (a *AuthService) handleLogout(w http.ResponseWriter, r *http.Request) {
 	session, _ := a.store.Get(r, "auth-session")
-	session.Values["user_id"] = nil
+	// セッションからユーザーIDを削除
+	session.Values["UserUuid"] = nil
+	// セッションを即時無効にする
 	session.Options.MaxAge = -1
 	session.Save(r, w)
 
@@ -257,30 +251,20 @@ func (a *AuthService) handleLogout(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
 }
 
-func (a *AuthService) saveOrUpdateUser(email, name, provider string) (*User, error) {
+// saveOrUpdateUser はOAuth認証で取得したユーザー情報をDBに保存または更新する
+func (a *AuthService) saveOrUpdateUser(email, provider string) (*User, error) {
 	var user User
-	
-	// 既存ユーザーをチェック
-	query := `SELECT id, email, name, provider FROM users WHERE email = $1 AND provider = $2`
-	err := a.db.QueryRow(query, email, provider).Scan(&user.ID, &user.Email, &user.Name, &user.Provider)
-	
-	if err == sql.ErrNoRows {
-		// 新規ユーザーを作成
-		insertQuery := `INSERT INTO users (email, name, provider) VALUES ($1, $2, $3) RETURNING id`
-		err = a.db.QueryRow(insertQuery, email, name, provider).Scan(&user.ID)
-		if err != nil {
-			return nil, err
-		}
-		user.Email = email
-		user.Name = name
-		user.Provider = provider
-	} else if err != nil {
-		return nil, err
+	// emailとproviderでユーザーを検索し、存在しなければ新しいレコードを作成する
+	// 作成時にはBeforeCreateフックが走り、UUIDが設定される
+	result := a.db.Where(User{Email: email, Provider: provider}).FirstOrCreate(&user, User{Email: email, Provider: provider})
+	if result.Error != nil {
+		return nil, result.Error
 	}
-
 	return &user, nil
 }
 
+// corsMiddleware はCORS(Cross-Origin Resource Sharing)を設定するミドルウェア
+// これにより、http://localhost:3000 のフロントエンドからこのAPIへのリクエストが許可される
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
@@ -292,7 +276,6 @@ func corsMiddleware(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-
 		next.ServeHTTP(w, r)
 	})
 }
