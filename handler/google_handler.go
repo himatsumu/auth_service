@@ -3,6 +3,7 @@ package handler
 import (
 	"auth-service/service"
 	"net/http"
+	"net/url"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -12,10 +13,11 @@ import (
 type GoogleHandler struct {
 	Service *service.GoogleService
 	Store   *sessions.CookieStore
+	jwt     *service.JWTService
 }
 
-func NewGoogleHandler(s *service.GoogleService, store *sessions.CookieStore) *GoogleHandler {
-	return &GoogleHandler{Service: s, Store: store}
+func NewGoogleHandler(s *service.GoogleService, store *sessions.CookieStore, jwt *service.JWTService) *GoogleHandler {
+	return &GoogleHandler{Service: s, Store: store, jwt: jwt}
 }
 // Google認証ページへのリダイレクトを開始
 func (h *GoogleHandler) HandleAuth(w http.ResponseWriter, r *http.Request) {
@@ -40,8 +42,21 @@ func (h *GoogleHandler) HandleAuthCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	token, err := h.jwt.GenerateToken(dbUser)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Authorization", "Bearer "+token)
+
 	session, _ := h.Store.Get(r, "auth-session")
 	session.Values["UserUuid"] = dbUser.UserUuid
 	session.Save(r, w)
-	http.Redirect(w, r, "http://localhost:3000/dashboard", http.StatusTemporaryRedirect)
+
+	redirectURL := "http://localhost:3000/dashboard"
+	u, _ := url.Parse(redirectURL)
+	q := u.Query()
+	q.Set("token", token)
+	u.RawQuery = q.Encode()
+	http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 }

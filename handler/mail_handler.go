@@ -12,10 +12,11 @@ import (
 type MailHandler struct {
 	Service *service.MailService
 	Store   *sessions.CookieStore
+	jwt     *service.JWTService
 }
 
-func NewMailHandler(s *service.MailService, store *sessions.CookieStore) *MailHandler {
-	return &MailHandler{Service: s, Store: store}
+func NewMailHandler(s *service.MailService, store *sessions.CookieStore , jwt *service.JWTService) *MailHandler {
+	return &MailHandler{Service: s, Store: store, jwt: jwt}
 }
 
 // ユーザー登録
@@ -59,6 +60,13 @@ func (h *MailHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token, err := h.jwt.GenerateToken(user)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Authorization", "Bearer "+token)
+
 	session, _ := h.Store.Get(r, "auth-session")
 	session.Values["UserUuid"] = user.UserUuid
 	session.Save(r, w)
@@ -71,6 +79,7 @@ func (h *MailHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 			Email:    user.Email,
 			Provider: user.Provider,
 		},
+		"token": token,
 	})
 }
 

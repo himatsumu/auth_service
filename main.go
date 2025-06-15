@@ -7,6 +7,7 @@ import (
 	"auth-service/repository"
 	"auth-service/router" // routerパッケージをインポート
 	"auth-service/service"
+	"auth-service/util"
 	"encoding/base64"
 	"fmt"
 	"log"
@@ -31,6 +32,14 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
+	privateKey, err := util.LoadPrivateKey("keys/private.key")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	// JWTサービスの初期化
+	jwtService := service.NewJWTService(privateKey, "auth-service")
+
 	// 依存関係の初期化 (DI: Dependency Injection)
 	// repository -> service -> handler の順でインスタンスを生成
 	mailRepo := repository.NewMailRepository(db)
@@ -45,8 +54,8 @@ func main() {
 	}
 	store := sessions.NewCookieStore([]byte(sessionSecret))
 
-	mailHandler := handler.NewMailHandler(mailService, store)
-	googleHandler := handler.NewGoogleHandler(googleService, store)
+	mailHandler := handler.NewMailHandler(mailService, store, jwtService)
+	googleHandler := handler.NewGoogleHandler(googleService, store, jwtService)
 
 	// Goth (OAuth) の設定
 	goth.UseProviders(
