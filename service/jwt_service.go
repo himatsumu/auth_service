@@ -15,7 +15,6 @@ type JWTService struct {
 
 
 type JWTClaims struct {
-	UUID string `json:"uuid"`
 	jwt.RegisteredClaims
 }
 
@@ -32,7 +31,6 @@ func (s *JWTService) GenerateToken(user *model.User) (string, error) {
 
 	// クレーム（トークンに含める情報）を設定
 	claims := &JWTClaims{
-		UUID: user.UserUuid,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
