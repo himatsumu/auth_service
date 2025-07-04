@@ -18,3 +18,8 @@ func NewGoogleService(repo *repository.GoogleRepository) *GoogleService {
 func (s *GoogleService) ProcessUser(email, provider string) (*model.User, error) {
 	return s.Repo.FindOrCreateUser(email, provider)
 }
+
+// ユーザー情報の取得
+func (s *GoogleService) GetUserByUUID(uuid string) (*model.User, error) {
+	return s.Repo.FindUserByUUID(uuid)
+}

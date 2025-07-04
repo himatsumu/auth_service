@@ -24,3 +24,9 @@ func (r *GoogleRepository) FindOrCreateUser(email, provider string) (*model.User
 	}
 	return &user, nil
 }
+
+func (r *GoogleRepository) FindUserByUUID(uuid string) (*model.User, error) {
+	var user model.User
+	result := r.DB.First(&user, "user_uuid = ?", uuid)
+	return &user, result.Error
+}

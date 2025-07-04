@@ -3,6 +3,7 @@ package handler
 import (
 	"auth-service/service"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -53,7 +54,56 @@ func (h *GoogleHandler) HandleAuthCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	token, err := h.jwt.GenerateToken(dbUser)
+	// セッションの保存
+	session, _ := h.Store.Get(r, "auth-session")
+	session.Values["UserUuid"] = dbUser.UserUuid
+	err = session.Save(r, w)
+	if err != nil {
+		fmt.Printf("セッションの保存に失敗しました: %v\n", err)
+		http.Error(w, "セッションの保存に失敗しました", http.StatusInternalServerError)
+        return
+	}
+	fmt.Println("リダイレクトするよ")
+
+	// リダイレクト
+	http.Redirect(w, r, "http://localhost:3000/login", http.StatusTemporaryRedirect)
+}
+
+// セッション情報からJWTを生成して返す
+func (h *GoogleHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("セッション情報からJWTを生成して返す")
+	// リクエストからセッションを取得
+	session, err := h.Store.Get(r, "auth-session")
+	if err != nil {
+		fmt.Println("セッションの取得に失敗しました")
+		fmt.Println(err)
+		http.Error(w, "セッションの取得に失敗しました", http.StatusInternalServerError)
+		return
+	}
+
+	// セッションからユーザーUUIDを取得
+	userUuid, ok := session.Values["UserUuid"].(string)
+	if !ok || userUuid == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  http.StatusUnauthorized,
+			"message": "認証情報がありません",
+		})
+		return
+	}
+
+	// UUIDを使ってユーザー情報をデータベースから取得
+	user, err := h.Service.GetUserByUUID(userUuid) // 先ほど追加したメソッドを使用
+	if err != nil {
+		fmt.Println("ユーザーの取得に失敗しました")
+		fmt.Println(err)
+		http.Error(w, "ユーザーの取得に失敗しました", http.StatusInternalServerError)
+		return
+	}
+
+	// 新しいJWTを生成
+	token, err := h.jwt.GenerateToken(user)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -63,20 +113,14 @@ func (h *GoogleHandler) HandleAuthCallback(w http.ResponseWriter, r *http.Reques
 		})
 		return
 	}
-	// セッションの保存
-	session, _ := h.Store.Get(r, "auth-session")
-	session.Values["UserUuid"] = dbUser.UserUuid
-	session.Save(r, w)
 
-	// JSON レスポンスを返す
+	fmt.Println("あとは返すだけ")
+	// JWTをJSONレスポンスとして返す
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"token":   token,
-		"user": map[string]interface{}{
-			"uuid":     dbUser.UserUuid,
-			"provider": dbUser.Provider,
-		},
-		"message": "認可に成功しました",
+		"status": http.StatusOK,
+		"message": "トークンを生成しました",
+		"token":  token,
 	})
+	fmt.Println(token)
 }

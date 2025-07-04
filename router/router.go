@@ -17,6 +17,7 @@ func NewRouter(mailHandler *handler.MailHandler, googleHandler *handler.GoogleHa
 	// Google認証のルーティング
 	r.HandleFunc("/auth/{provider}", googleHandler.HandleAuth).Methods("GET")
 	r.HandleFunc("/auth/callback/{provider}", googleHandler.HandleAuthCallback).Methods("GET")
+	r.HandleFunc("/auth/user/",  googleHandler.GetUser)
 
 	// メール認証のルーティング
 	r.HandleFunc("/auth/register", mailHandler.HandleRegister).Methods("POST", "OPTIONS")
