@@ -63,7 +63,6 @@ func (h *GoogleHandler) HandleAuthCallback(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "セッションの保存に失敗しました", http.StatusInternalServerError)
         return
 	}
-	fmt.Println("リダイレクトするよ")
 
 	// リダイレクト
 	http.Redirect(w, r, "http://localhost:3000/login", http.StatusTemporaryRedirect)
@@ -71,11 +70,9 @@ func (h *GoogleHandler) HandleAuthCallback(w http.ResponseWriter, r *http.Reques
 
 // セッション情報からJWTを生成して返す
 func (h *GoogleHandler) GetUser(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("セッション情報からJWTを生成して返す")
 	// リクエストからセッションを取得
 	session, err := h.Store.Get(r, "auth-session")
 	if err != nil {
-		fmt.Println("セッションの取得に失敗しました")
 		fmt.Println(err)
 		http.Error(w, "セッションの取得に失敗しました", http.StatusInternalServerError)
 		return
@@ -96,7 +93,6 @@ func (h *GoogleHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	// UUIDを使ってユーザー情報をデータベースから取得
 	user, err := h.Service.GetUserByUUID(userUuid) // 先ほど追加したメソッドを使用
 	if err != nil {
-		fmt.Println("ユーザーの取得に失敗しました")
 		fmt.Println(err)
 		http.Error(w, "ユーザーの取得に失敗しました", http.StatusInternalServerError)
 		return
@@ -114,7 +110,6 @@ func (h *GoogleHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("あとは返すだけ")
 	// JWTをJSONレスポンスとして返す
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -122,5 +117,4 @@ func (h *GoogleHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		"message": "トークンを生成しました",
 		"token":  token,
 	})
-	fmt.Println(token)
 }
