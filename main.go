@@ -40,6 +40,8 @@ func main() {
 	// JWTサービスの初期化
 	jwtService := service.NewJWTService(privateKey, "auth-service")
 
+	database.Testdata(db)
+
 	// 依存関係の初期化 (DI: Dependency Injection)
 	// repository -> service -> handler の順でインスタンスを生成
 	mailRepo := repository.NewMailRepository(db)

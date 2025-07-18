@@ -99,7 +99,7 @@ func (h *MailHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":   http.StatusOK,
-		"provider": user.Provider,
+		"message":  "ログインに成功しました",
 		"token":    token,
 	})
 }
