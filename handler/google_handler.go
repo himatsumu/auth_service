@@ -65,7 +65,7 @@ func (h *GoogleHandler) HandleAuthCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	// リダイレクト
-	http.Redirect(w, r, "http://localhost:3000/login", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "http://localhost:5173/login", http.StatusTemporaryRedirect)
 }
 
 // セッション情報からJWTを生成して返す
