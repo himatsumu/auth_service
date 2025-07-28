@@ -30,7 +30,7 @@ func init() {
 	// ★★★ ハッシュを生成した後に、テストデータを初期化する ★★★
 	UserTestData = []model.User{
 		{
-			UserUuid:     "a1b2c3d4-e5f6-7777-8888-999a0b1c2d3e",
+			UserUuid:     "11111111-1111-1111-1111-111111111111",
 			Email:        "testuser1@example.com",
 			PasswordHash: testPasswordHash, // 事前に生成したハッシュを使う
 			Provider:     "email",
@@ -38,7 +38,7 @@ func init() {
 			UpdatedAt:    time.Date(2025, 7, 10, 10, 0, 0, 0, time.UTC),
 		},
 		{
-			UserUuid:     "f0e9d8c7-b6a5-4444-3333-22b1a0c9d8e7",
+			UserUuid:     "22222222-2222-2222-2222-222222222222",
 			Email:        "testuser2@example.com",
 			PasswordHash: testPasswordHash, // 事前に生成したハッシュを使う
 			Provider:     "email",
@@ -46,7 +46,7 @@ func init() {
 			UpdatedAt:    time.Date(2025, 7, 11, 11, 0, 0, 0, time.UTC),
 		},
 		{
-			UserUuid:     "12345678-90ab-cdef-1234-567890abcdef",
+			UserUuid:     "33333333-3333-3333-3333-333333333333",
 			Email:        "googleuser@example.com",
 			PasswordHash: "", // Google認証ユーザーはパスワードなし
 			Provider:     "google",
