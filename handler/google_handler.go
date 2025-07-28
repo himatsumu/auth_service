@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -64,8 +65,12 @@ func (h *GoogleHandler) HandleAuthCallback(w http.ResponseWriter, r *http.Reques
         return
 	}
 
+	reactPort := os.Getenv("REACT_PORT")
+
+	redirectUrl := fmt.Sprintf("http://localhost:%s/login", reactPort)
+
 	// リダイレクト
-	http.Redirect(w, r, "http://localhost:5173/login", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, redirectUrl, http.StatusTemporaryRedirect)
 }
 
 // セッション情報からJWTを生成して返す
