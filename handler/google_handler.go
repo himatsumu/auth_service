@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/gorilla/mux"
@@ -58,6 +59,8 @@ func (h *GoogleHandler) HandleAuthCallback(w http.ResponseWriter, r *http.Reques
 	// セッションの保存
 	session, _ := h.Store.Get(r, "auth-session")
 	session.Values["UserUuid"] = dbUser.UserUuid
+	session.Values["Provider"] = gothUser.Provider
+	session.Values["accessToken"] = gothUser.AccessToken
 	err = session.Save(r, w)
 	if err != nil {
 		fmt.Printf("セッションの保存に失敗しました: %v\n", err)
@@ -122,4 +125,22 @@ func (h *GoogleHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		"message": "トークンを生成しました",
 		"token":  token,
 	})
+}
+
+func revokeGoogleToken(accessToken string) error {
+	revokeURL := "https://oauth2.googleapis.com/revoke"
+	params := url.Values{}
+	params.Add("token", accessToken)
+
+	resp, err := http.PostForm(revokeURL, params)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return err
+	}
+	
+	return nil
 }

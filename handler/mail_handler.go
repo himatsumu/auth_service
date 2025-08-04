@@ -3,6 +3,8 @@ package handler
 import (
 	"auth-service/service"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/sessions"
@@ -106,8 +108,25 @@ func (h *MailHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 // ログアウト
 func (h *MailHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
-	session, _ := h.Store.Get(r, "auth-session")
+	session, err := h.Store.Get(r, "auth-session")
+	if err != nil {
+		fmt.Println(err)
+		http.Error(w, "セッションの取得に失敗しました", http.StatusInternalServerError)
+		return
+	}
+
+	if provider, ok := session.Values["Provider"].(string); ok && provider == "google" {
+		if accessToken, ok := session.Values["accessToken"].(string); ok && accessToken != "" {
+			err := revokeGoogleToken(accessToken)
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}
+
 	session.Values["UserUuid"] = nil
+	session.Values["accessToken"] = nil
+	session.Values["Provider"] = nil
 	session.Options.MaxAge = -1
 	session.Save(r, w)
 	w.Header().Set("Content-Type", "application/json")
