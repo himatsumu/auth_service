@@ -49,5 +49,5 @@ jobs:
         steps:
             - name: Deploy to K8s
               run: |
-                  kubectl set image deployment/auth-service auth-service=${{ env.REGISTRY }}/${{ steps.prepare_name.outputs.IMAGE_NAME }}:${{ github.sha }}
+                  kubectl set image deployment/auth-service auth-container=${{ env.REGISTRY }}/${{ needs.build-and-push.outputs.IMAGE_NAME }}:${{ github.sha }}
                   kubectl rollout status deployment/auth-service
