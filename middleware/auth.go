@@ -9,25 +9,26 @@ import (
 // CORSMiddleware はCORSを設定する
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reactUrl := os.Getenv("REACT_URL")
+		//reactUrl := os.Getenv("REACT_URL")
 
 		// 許可したいオリジンのリスト
-		allowlist := []string{reactUrl, "https://himatsumu.kirimaru.org"}
+		// allowlist := []string{reactUrl, "https://himatsumu.kirimaru.org"}
 		
-		origin := r.Header.Get("Origin")
+		// origin := r.Header.Get("Origin")
 		
-		// リクエストのOriginが許可リストに含まれているかを確認
-		isAllowed := false
-		for _, allowedOrigin := range allowlist {
-			if strings.EqualFold(origin, allowedOrigin) {
-				isAllowed = true
-				break
-			}
-		}
+		// // リクエストのOriginが許可リストに含まれているかを確認
+		// isAllowed := false
+		// for _, allowedOrigin := range allowlist {
+		// 	if strings.EqualFold(origin, allowedOrigin) {
+		// 		isAllowed = true
+		// 		break
+		// 	}
+		// }
 
-		if isAllowed {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-		}
+		// if isAllowed {
+		// 	w.Header().Set("Access-Control-Allow-Origin", origin)
+		// }
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
