@@ -40,6 +40,9 @@ func main() {
 	// JWTサービスの初期化
 	jwtService := service.NewJWTService(privateKey, "auth-service")
 
+	// データベースのマイグレーション
+	db.AutoMigrate(&model.User{})
+
 	database.Testdata(db)
 
 	// 依存関係の初期化 (DI: Dependency Injection)
@@ -69,8 +72,6 @@ func main() {
 	)
 	gothic.Store = store
 
-	// データベースのマイグレーション
-	db.AutoMigrate(&model.User{})
 
 	// ルーターの初期化
 	r := router.NewRouter(mailHandler, googleHandler)
