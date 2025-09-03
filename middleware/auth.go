@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"net/http"
-	"os"
-	"strings"
+	// "os"
+	// "strings"
 )
 
 // CORSMiddleware はCORSを設定する
