@@ -9,6 +9,7 @@ metadata:
     nginx.ingress.kubernetes.io/cors-allow-headers: "Content-Type, Authorization"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
 spec:
+  ingressClassName: nginx
   rules:
     - host: auth-himatsumu.kirimaru.org
       http:
