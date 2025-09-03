@@ -4,7 +4,7 @@ metadata:
   name: auth-service
 spec:
   selector:
-    app: auth-service
+    app: auth
   ports:
     - protocol: TCP
       port: 18080
