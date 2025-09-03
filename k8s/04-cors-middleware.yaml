@@ -1,18 +1,18 @@
-apiVersion: traefik.io/v1alpha1
+apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
   name: cors-middleware
   namespace: default
 spec:
-  cors:
-    allowOrigin: "https://himatsumu.kirimaru.org"
-    allowMethods:
-      - "GET"
-      - "POST"
-      - "PUT"
-      - "DELETE"
-      - "OPTIONS"
-    allowHeaders:
-      - "Content-Type"
-      - "Authorization"
-    allowCredentials: true
+  headers:
+    accessControlAllowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    accessControlAllowHeaders:
+      - Content-Type
+      - Authorization
+    accessControlAllowOrigin: https://himatsumu.kirimaru.org
+    accessControlAllowCredentials: true
