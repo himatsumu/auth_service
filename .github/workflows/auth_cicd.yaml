@@ -15,7 +15,7 @@ jobs:
             contents: read
             packages: write
         outputs:
-            IMAGE_NAME: ${{ steps.build.outputs.image_name }}
+            IMAGE_NAME: ${{ steps.prepare_name.outputs.IMAGE_NAME }}
         name: Build and Push Docker Image
 
         steps:
