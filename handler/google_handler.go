@@ -68,9 +68,7 @@ func (h *GoogleHandler) HandleAuthCallback(w http.ResponseWriter, r *http.Reques
         return
 	}
 
-	reactPort := os.Getenv("REACT_PORT")
-
-	redirectUrl := fmt.Sprintf("http://localhost:%s/login", reactPort)
+	redirectUrl := os.Getenv("REDIRECT_URL")
 
 	// リダイレクト
 	http.Redirect(w, r, redirectUrl, http.StatusTemporaryRedirect)
