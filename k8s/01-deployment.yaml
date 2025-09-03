@@ -16,7 +16,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: auth-container
-        image: ghcr.io/himatsumu/himatsumu_auth:latest
+        image: ghcr.io/himatsumu/auth_service:latest
         ports:
         - containerPort: 18080
         envFrom:
